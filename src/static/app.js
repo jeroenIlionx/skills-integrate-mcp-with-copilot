@@ -2,159 +2,230 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitiesList = document.getElementById("activities-list");
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
+  const loginForm = document.getElementById("login-form");
+  const registerForm = document.getElementById("register-form");
+  const logoutButton = document.getElementById("logout-button");
+  const signupContainer = document.getElementById("signup-container");
+  const authStatus = document.getElementById("auth-status");
+  const signedInAs = document.getElementById("signed-in-as");
   const messageDiv = document.getElementById("message");
+  let currentUser = null;
 
-  // Function to fetch activities from API
+  function showMessage(message, status) {
+    messageDiv.textContent = message;
+    messageDiv.className = status;
+    messageDiv.classList.remove("hidden");
+  }
+
+  function showLoggedOut() {
+    currentUser = null;
+    loginForm.classList.remove("hidden");
+    registerForm.classList.remove("hidden");
+    logoutButton.classList.add("hidden");
+    signupContainer.classList.add("hidden");
+    authStatus.textContent =
+      "Sign in or create a student account to manage your registrations.";
+  }
+
+  async function updateAuthState() {
+    const response = await fetch("/auth/me");
+    if (response.status === 401) {
+      showLoggedOut();
+      return;
+    }
+    if (!response.ok) {
+      throw new Error("Could not check the signed-in account");
+    }
+
+    const user = await response.json();
+    currentUser = user;
+    loginForm.classList.add("hidden");
+    registerForm.classList.add("hidden");
+    logoutButton.classList.remove("hidden");
+    authStatus.textContent = `Signed in as ${user.email} (${user.role}).`;
+    if (user.role === "student") {
+      signedInAs.textContent = `Registering as ${user.email}`;
+      signupContainer.classList.remove("hidden");
+    } else {
+      signupContainer.classList.add("hidden");
+    }
+  }
+
   async function fetchActivities() {
     try {
       const response = await fetch("/activities");
+      if (!response.ok) {
+        throw new Error("Could not load activities");
+      }
       const activities = await response.json();
-
-      // Clear loading message
-      activitiesList.innerHTML = "";
-
-      // Populate activities list
+      activitiesList.replaceChildren();
+      activitySelect.replaceChildren(new Option("-- Select an activity --", ""));
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
+        const heading = document.createElement("h4");
+        heading.textContent = name;
+        activityCard.appendChild(heading);
+        const description = document.createElement("p");
+        description.textContent = details.description;
+        activityCard.appendChild(description);
+        const schedule = document.createElement("p");
+        schedule.textContent = `Schedule: ${details.schedule}`;
+        activityCard.appendChild(schedule);
+        const availability = document.createElement("p");
+        availability.textContent = `Availability: ${
+          details.max_participants - details.participants.length
+        } spots left`;
+        activityCard.appendChild(availability);
 
-        const spotsLeft =
-          details.max_participants - details.participants.length;
-
-        // Create participants HTML with delete icons instead of bullet points
-        const participantsHTML =
-          details.participants.length > 0
-            ? `<div class="participants-section">
-              <h5>Participants:</h5>
-              <ul class="participants-list">
-                ${details.participants
-                  .map(
-                    (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
-                  )
-                  .join("")}
-              </ul>
-            </div>`
-            : `<p><em>No participants yet</em></p>`;
-
-        activityCard.innerHTML = `
-          <h4>${name}</h4>
-          <p>${details.description}</p>
-          <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
-          <div class="participants-container">
-            ${participantsHTML}
-          </div>
-        `;
-
+        const participants = document.createElement("div");
+        participants.className = "participants-container";
+        const participantsHeading = document.createElement("h5");
+        participantsHeading.textContent = "Participants";
+        participants.appendChild(participantsHeading);
+        if (details.participants.length === 0) {
+          const emptyMessage = document.createElement("p");
+          emptyMessage.textContent = "No participants yet";
+          participants.appendChild(emptyMessage);
+        } else {
+          const participantList = document.createElement("ul");
+          participantList.className = "participants-list";
+          details.participants.forEach((email) => {
+            const listItem = document.createElement("li");
+            const participantEmail = document.createElement("span");
+            participantEmail.textContent = email;
+            listItem.appendChild(participantEmail);
+            if (currentUser?.role === "student" && email === currentUser.email) {
+              const unregisterButton = document.createElement("button");
+              unregisterButton.type = "button";
+              unregisterButton.textContent = "Unregister";
+              unregisterButton.addEventListener("click", () =>
+                handleUnregister(name)
+              );
+              listItem.appendChild(unregisterButton);
+            }
+            participantList.appendChild(listItem);
+          });
+          participants.appendChild(participantList);
+        }
+        activityCard.appendChild(participants);
         activitiesList.appendChild(activityCard);
 
-        // Add option to select dropdown
         const option = document.createElement("option");
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
       });
-
-      // Add event listeners to delete buttons
-      document.querySelectorAll(".delete-btn").forEach((button) => {
-        button.addEventListener("click", handleUnregister);
-      });
     } catch (error) {
-      activitiesList.innerHTML =
-        "<p>Failed to load activities. Please try again later.</p>";
+      activitiesList.textContent =
+        "Failed to load activities. Please try again later.";
       console.error("Error fetching activities:", error);
     }
   }
 
-  // Handle unregister functionality
-  async function handleUnregister(event) {
-    const button = event.target;
-    const activity = button.getAttribute("data-activity");
-    const email = button.getAttribute("data-email");
-
+  async function handleUnregister(activity) {
     try {
       const response = await fetch(
-        `/activities/${encodeURIComponent(
-          activity
-        )}/unregister?email=${encodeURIComponent(email)}`,
-        {
-          method: "DELETE",
-        }
+        `/activities/${encodeURIComponent(activity)}/unregister`,
+        { method: "DELETE" }
       );
-
       const result = await response.json();
-
-      if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
-
-        // Refresh activities list to show updated participants
-        fetchActivities();
-      } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+      if (!response.ok) {
+        if (response.status === 401) {
+          showLoggedOut();
+          await fetchActivities();
+        }
+        showMessage(result.detail || "An error occurred", "error");
+        return;
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
+      await fetchActivities();
+      showMessage(result.message, "success");
     } catch (error) {
-      messageDiv.textContent = "Failed to unregister. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to unregister. Please try again.", "error");
       console.error("Error unregistering:", error);
     }
   }
 
-  // Handle form submission
+  async function submitCredentials(event, form, endpoint) {
+    event.preventDefault();
+    try {
+      const prefix = form.id === "login-form" ? "login" : "register";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: document.getElementById(`${prefix}-email`).value,
+          password: document.getElementById(`${prefix}-password`).value,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        showMessage(result.detail || "An error occurred", "error");
+        return;
+      }
+      form.reset();
+      await updateAuthState();
+      await fetchActivities();
+      showMessage("Signed in successfully.", "success");
+    } catch (error) {
+      showMessage("Could not complete authentication. Please try again.", "error");
+      console.error("Error authenticating:", error);
+    }
+  }
+
+  loginForm.addEventListener("submit", (event) =>
+    submitCredentials(event, loginForm, "/auth/login")
+  );
+  registerForm.addEventListener("submit", (event) =>
+    submitCredentials(event, registerForm, "/auth/register")
+  );
+
+  logoutButton.addEventListener("click", async () => {
+    try {
+      const response = await fetch("/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        throw new Error("Sign out request failed");
+      }
+      showLoggedOut();
+      await fetchActivities();
+      showMessage("Signed out.", "success");
+    } catch (error) {
+      showMessage("Could not sign out. Please try again.", "error");
+      console.error("Error signing out:", error);
+    }
+  });
+
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-
-    const email = document.getElementById("email").value;
-    const activity = document.getElementById("activity").value;
-
     try {
+      const activity = activitySelect.value;
       const response = await fetch(
-        `/activities/${encodeURIComponent(
-          activity
-        )}/signup?email=${encodeURIComponent(email)}`,
-        {
-          method: "POST",
-        }
+        `/activities/${encodeURIComponent(activity)}/signup`,
+        { method: "POST" }
       );
-
       const result = await response.json();
-
-      if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
-        signupForm.reset();
-
-        // Refresh activities list to show updated participants
-        fetchActivities();
-      } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+      if (!response.ok) {
+        if (response.status === 401) {
+          showLoggedOut();
+          await fetchActivities();
+        }
+        showMessage(result.detail || "An error occurred", "error");
+        return;
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
+      signupForm.reset();
+      await fetchActivities();
+      showMessage(result.message, "success");
     } catch (error) {
-      messageDiv.textContent = "Failed to sign up. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to sign up. Please try again.", "error");
       console.error("Error signing up:", error);
     }
   });
 
-  // Initialize app
-  fetchActivities();
+  updateAuthState()
+    .then(fetchActivities)
+    .catch((error) => {
+      showMessage("Could not check the signed-in account.", "error");
+      console.error("Error checking account:", error);
+      fetchActivities();
+    });
 });

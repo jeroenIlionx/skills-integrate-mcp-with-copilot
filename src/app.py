@@ -5,14 +5,23 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import sqlite3
 from pathlib import Path
+
+from auth import get_current_student, initialize_auth_database, router as auth_router
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
+app.include_router(auth_router)
+
+
+@app.on_event("startup")
+def startup():
+    initialize_auth_database()
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
@@ -89,7 +98,9 @@ def get_activities():
 
 
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
+def signup_for_activity(
+    activity_name: str, user: sqlite3.Row = Depends(get_current_student)
+):
     """Sign up a student for an activity"""
     # Validate activity exists
     if activity_name not in activities:
@@ -99,6 +110,7 @@ def signup_for_activity(activity_name: str, email: str):
     activity = activities[activity_name]
 
     # Validate student is not already signed up
+    email = user["email"]
     if email in activity["participants"]:
         raise HTTPException(
             status_code=400,
@@ -111,7 +123,9 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(
+    activity_name: str, user: sqlite3.Row = Depends(get_current_student)
+):
     """Unregister a student from an activity"""
     # Validate activity exists
     if activity_name not in activities:
@@ -121,6 +135,7 @@ def unregister_from_activity(activity_name: str, email: str):
     activity = activities[activity_name]
 
     # Validate student is signed up
+    email = user["email"]
     if email not in activity["participants"]:
         raise HTTPException(
             status_code=400,
