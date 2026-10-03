@@ -57,6 +57,10 @@ section h3 {
   color: #1a237e;
 }
 
+section h4 {
+  margin: 12px 0;
+}
+
 .activity-card {
   margin-bottom: 15px;
   padding: 15px;
@@ -81,28 +85,22 @@ section h3 {
   border-top: 1px dashed #ccc;
 }
 
-.participants-section h5 {
+.participants-container h5 {
   margin-bottom: 8px;
   color: #1a237e;
   font-size: 16px;
 }
 
-.participants-section ul {
+.participants-list {
   list-style-type: none;
   padding-left: 5px;
 }
 
-.participants-section ul li {
+.participants-list li {
   padding: 4px 0;
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-/* Remove the bullet point pseudo-element */
-.participants-section ul li::before {
-  display: none;
 }
 
 .participant-email {
@@ -110,22 +108,7 @@ section h3 {
   margin-right: 8px;
 }
 
-.delete-btn {
-  background: none;
-  border: none;
-  color: #c62828;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 5px;
-  transition: all 0.2s;
-  border-radius: 3px;
-}
-
-.delete-btn:hover {
-  background-color: #ffebee;
-}
-
-.participants-section p {
+.participants-container p {
   color: #777;
   font-style: italic;
 }
@@ -147,6 +130,10 @@ section h3 {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 16px;
+}
+
+form {
+  margin-bottom: 24px;
 }
 
 button {
